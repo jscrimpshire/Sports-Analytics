@@ -1,0 +1,15 @@
+I was reading [this blog post](https://tonyelhabr.rbind.io/posts/probability-calibration/) from Tony El Habr about models that frequently
+over- or underpredict events. He evaluated FiveThirtyEight's pre-match win probabilites for the NWSL and WSL in that article. It made me 
+think of an issue I had been having with some expected points models, both in my own work and from my reading online. 
+
+The problem is that because these models use Monte Carlo simulations (or similar processes), they tend to converge to a middling value. 
+They frequently expect the top teams (like Manchester City and Liverpool) to get a lower points total than they actually do, while conversely
+expecting the bottom teams (like Sheffield United) to get a higher points total than they actually do. This is because the models are purely
+probabilistic. When running this model after matchweek 10, it expects Manchester City to have 3.09 xG to Sheffield United's 0.39, resulting 
+in a win probability of 89.3% for Manchester City, 2.5% for Sheffield, and an 8.1% chance of a draw. Any rational outsider would expect Manchester
+City to dominate Sheffield United 100 times out of 100. However, this is simply not how the math works. Now, a 10.7% chance of City not winning 
+doesn't sound TOO high for one game, but when aggregated over the course of a season, you start to get results at the extremes that don't reflect
+reality's perception of likelihoods. 
+
+For now, the code shows how to import the data from FBref, create a weighted Poisson model, run a Monte Carlo simulation, plot the distribution
+of points totals, and plot the differences between (the mean) expected and actual points total, both as a linear and residual plot. 

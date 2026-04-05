@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2026 NCAA Tournament — Bracket</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f5f4f0;--card:#ffffff;--text:#1a1a18;--text2:#6b6b67;--text3:#9a9a94;
+  --border:rgba(0,0,0,0.10);--border2:rgba(0,0,0,0.22);
+  --gold:#c49a1a;--gold-bg:#fdf3d8;--gold-border:#d4a820;
+  --line-dim:rgba(0,0,0,0.10);--line-hi:#2563eb;--line-base:rgba(100,100,100,0.35);
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#111110;--card:#1c1c1a;--text:#e8e8e4;--text2:#8a8a84;--text3:#5a5a54;
+  --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.20);
+  --gold:#e0aa3e;--gold-bg:#2a2008;--gold-border:#c49a1a;
+  --line-dim:rgba(255,255,255,0.06);--line-hi:#3b82f6;--line-base:rgba(160,160,140,0.25);
+}}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;min-height:100vh;overflow-x:hidden}
+#app{padding:20px 16px 40px}
+h1{font-size:21px;font-weight:600;letter-spacing:-0.4px;margin-bottom:3px}
+.sub{font-size:13px;color:var(--text2);margin-bottom:16px}
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--border2);margin-bottom:20px}
+.tab{padding:7px 16px;font-size:13px;cursor:pointer;color:var(--text2);border:none;border-bottom:2px solid transparent;margin-bottom:-1px;background:none;font-family:inherit;transition:color .15s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--text);border-bottom-color:var(--text);font-weight:500}
+.legend{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:16px;font-size:12px;color:var(--text2)}
+.litem{display:flex;align-items:center;gap:5px}
+.ldot{width:9px;height:9px;border-radius:50%}
+.lline{height:3px;width:26px;border-radius:2px;background:var(--line-base)}
+.lline.thick{height:7px}
+#wrap{overflow-x:auto;padding-bottom:10px}
+.region-wrap{overflow-x:auto;padding-bottom:10px}
+
+/* Team slots */
+.team{position:absolute;display:flex;align-items:center;gap:4px;padding:2px 5px;border-radius:3px;border:0.5px solid var(--border);background:var(--card);cursor:pointer;transition:border-color .12s,background .12s;overflow:hidden;white-space:nowrap}
+.team:hover,.team.hovered{border-color:var(--border2);background:var(--card);z-index:10}
+.team.champion{border-color:var(--gold-border)!important;background:var(--gold-bg)!important}
+.team.playin{border-style:dashed}
+.team.dimmed{opacity:.28}
+.pbar{position:absolute;left:0;top:0;bottom:0;opacity:.13;border-radius:3px;pointer-events:none}
+.seed{font-size:10px;color:var(--text2);font-weight:600;min-width:13px;text-align:right;flex-shrink:0;position:relative}
+.tname{font-size:11px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;position:relative}
+.tprob{font-size:10px;color:var(--text2);flex-shrink:0;position:relative;margin-left:auto;padding-left:3px}
+
+/* Tooltip */
+#tip{position:fixed;display:none;z-index:9999;background:var(--card);border:1px solid var(--border2);border-radius:8px;padding:11px 13px;min-width:172px;font-size:12px;pointer-events:none;box-shadow:0 4px 18px rgba(0,0,0,.18)}
+#tip.show{display:block}
+.tn{font-size:13px;font-weight:600;margin-bottom:8px;line-height:1.3}
+.trow{display:flex;justify-content:space-between;gap:18px;padding:2px 0;border-top:0.5px solid var(--border)}
+.trow:first-of-type{border:none}
+.tlabel{color:var(--text2)}
+.tval{font-weight:500}
+.tchamp{color:var(--gold);font-weight:700}
+.tcond{color:#2563eb;font-weight:600}
+</style>
+</head>
+<body>
+<div id="app">
+  <h1>2026 NCAA Tournament</h1>
+  <div class="sub">Win probabilities · Mar 15, 2026 &nbsp;·&nbsp; Hover a team to trace its path</div>
+  <div class="legend">
+    <div class="litem"><div class="lline thick" style="background:rgba(37,99,235,0.7)"></div> High probability path</div>
+    <div class="litem"><div class="lline" style="background:rgba(37,99,235,0.35)"></div> Lower probability path</div>
+    <div class="litem"><div class="ldot" style="background:#B5861A"></div> Champion favorite</div>
+    <div class="litem" style="border-left:1px solid var(--border2);padding-left:12px">Dashed border = play-in</div>
+  </div>
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('all',this)">Full Bracket</button>
+    <button class="tab" onclick="switchTab('East',this)">East</button>
+    <button class="tab" onclick="switchTab('South',this)">South</button>
+    <button class="tab" onclick="switchTab('West',this)">West</button>
+    <button class="tab" onclick="switchTab('Midwest',this)">Midwest</button>
+  </div>
+  <div id="container"></div>
+</div>
+<div id="tip"></div>
+
+<script>
+const DATA=[
+  {team:"Duke",code:"DUK",seed:1,region:"East",playin:0,rating:2251.1,r64:100,r32:98.97,s16:75.90,e8:55.19,f4:40.91,fin:25.82,champ:15.78},
+  {team:"Siena",code:"SIE",seed:16,region:"East",playin:0,rating:1493.3,r64:100,r32:1.03,s16:0.02,e8:0,f4:0,fin:0,champ:0},
+  {team:"Ohio St.",code:"OSU",seed:8,region:"East",playin:0,rating:1933.1,r64:100,r32:68.24,s16:18.77,e8:9.31,f4:4.79,fin:1.92,champ:0.71},
+  {team:"TCU",code:"TCU",seed:9,region:"East",playin:0,rating:1864.6,r64:100,r32:31.77,s16:5.30,e8:1.77,f4:0.63,fin:0.17,champ:0.04},
+  {team:"St. John's",code:"STJ",seed:5,region:"East",playin:0,rating:2051.6,r64:100,r32:81.09,s16:46.84,e8:18.21,f4:10.46,fin:4.48,champ:1.72},
+  {team:"Northern Iowa",code:"NIA",seed:12,region:"East",playin:0,rating:1755.2,r64:100,r32:18.91,s16:5.40,e8:0.80,f4:0.24,fin:0.05,champ:0.01},
+  {team:"Kansas",code:"KU",seed:4,region:"East",playin:0,rating:1955.0,r64:100,r32:88.05,s16:45.67,e8:14.61,f4:7.38,fin:2.74,champ:1.02},
+  {team:"California Baptist",code:"CAB",seed:13,region:"East",playin:0,rating:1630.3,r64:100,r32:11.95,s16:2.09,e8:0.13,f4:0.02,fin:0,champ:0},
+  {team:"Louisville",code:"LOU",seed:6,region:"East",playin:0,rating:1996.5,r64:100,r32:69.16,s16:35.90,e8:18.23,f4:6.60,fin:2.75,champ:1.09},
+  {team:"South Florida",code:"USF",seed:11,region:"East",playin:0,rating:1841.5,r64:100,r32:30.84,s16:10.63,e8:3.36,f4:0.68,fin:0.14,champ:0.03},
+  {team:"Michigan St.",code:"MSU",seed:3,region:"East",playin:0,rating:2035.9,r64:100,r32:91.16,s16:52.15,e8:25.39,f4:8.48,fin:3.19,champ:1.09},
+  {team:"North Dakota St.",code:"NDS",seed:14,region:"East",playin:0,rating:1608.7,r64:100,r32:8.84,s16:1.33,e8:0.17,f4:0.02,fin:0,champ:0},
+  {team:"UCLA",code:"CLA",seed:7,region:"East",playin:0,rating:1939.7,r64:100,r32:70.64,s16:29.78,e8:14.03,f4:4.19,fin:1.32,champ:0.38},
+  {team:"UCF",code:"UCF",seed:10,region:"East",playin:0,rating:1784.6,r64:100,r32:29.36,s16:7.54,e8:2.16,f4:0.34,fin:0.06,champ:0.01},
+  {team:"UConn",code:"CON",seed:2,region:"East",playin:0,rating:2042.4,r64:100,r32:89.51,s16:60.34,e8:36.26,f4:15.24,fin:6.64,champ:2.77},
+  {team:"Furman",code:"FUR",seed:15,region:"East",playin:0,rating:1489.0,r64:100,r32:10.49,s16:2.33,e8:0.41,f4:0.04,fin:0,champ:0},
+  {team:"Florida",code:"FLA",seed:1,region:"South",playin:0,rating:2168.7,r64:100,r32:99.13,s16:85.00,e8:60.45,f4:33.72,fin:18.96,champ:9.95},
+  {team:"Prairie View A&M",code:"PVA",seed:16,region:"South",playin:1,rating:1275.0,r64:0.38,r32:0,s16:0,e8:0,f4:0,fin:0,champ:0},
+  {team:"Lehigh",code:"LHI",seed:16,region:"South",playin:1,rating:1324.6,r64:0.49,r32:0,s16:0,e8:0,f4:0,fin:0,champ:0},
+  {team:"Clemson",code:"CLE",seed:8,region:"South",playin:0,rating:1870.2,r64:100,r32:34.80,s16:3.84,e8:1.21,f4:0.23,fin:0.07,champ:0.01},
+  {team:"Iowa",code:"IOW",seed:9,region:"South",playin:0,rating:1912.7,r64:100,r32:65.21,s16:11.11,e8:4.41,f4:1.21,fin:0.37,champ:0.12},
+  {team:"Vanderbilt",code:"VAN",seed:5,region:"South",playin:0,rating:2008.3,r64:100,r32:83.96,s16:51.43,e8:19.81,f4:7.97,fin:3.48,champ:1.38},
+  {team:"McNeese",code:"MCN",seed:12,region:"South",playin:0,rating:1739.2,r64:100,r32:16.04,s16:4.77,e8:0.73,f4:0.13,fin:0.02,champ:0.01},
+  {team:"Nebraska",code:"NEB",seed:4,region:"South",playin:0,rating:1985.9,r64:100,r32:91.42,s16:42.92,e8:13.33,f4:4.53,fin:1.66,champ:0.53},
+  {team:"Troy",code:"TRO",seed:13,region:"South",playin:0,rating:1541.9,r64:100,r32:8.58,s16:0.88,e8:0.06,f4:0,fin:0,champ:0},
+  {team:"North Carolina",code:"UNC",seed:6,region:"South",playin:0,rating:1905.8,r64:100,r32:45.61,s16:7.20,e8:1.33,f4:0.25,fin:0.06,champ:0.01},
+  {team:"VCU",code:"VCU",seed:11,region:"South",playin:0,rating:1831.7,r64:100,r32:54.39,s16:9.65,e8:2.03,f4:0.41,fin:0.09,champ:0.02},
+  {team:"Illinois",code:"ILL",seed:3,region:"South",playin:0,rating:2081.9,r64:100,r32:98.13,s16:82.92,e8:42.46,f4:22.30,fin:11.84,champ:5.91},
+  {team:"Penn",code:"PEN",seed:14,region:"South",playin:0,rating:1553.9,r64:100,r32:1.88,s16:0.23,e8:0.01,f4:0,fin:0,champ:0},
+  {team:"Saint Mary's (CA)",code:"STM",seed:7,region:"South",playin:0,rating:1939.0,r64:100,r32:58.77,s16:16.04,e8:5.39,f4:1.67,fin:0.53,champ:0.14},
+  {team:"Texas A&M",code:"TAM",seed:10,region:"South",playin:0,rating:1848.3,r64:100,r32:41.23,s16:8.49,e8:2.38,f4:0.63,fin:0.13,champ:0.02},
+  {team:"Houston",code:"HOU",seed:2,region:"South",playin:0,rating:2144.2,r64:100,r32:96.73,s16:75.06,e8:46.37,f4:26.95,fin:13.49,champ:6.33},
+  {team:"Idaho",code:"IDA",seed:15,region:"South",playin:0,rating:1530.0,r64:100,r32:3.27,s16:0.41,e8:0.03,f4:0,fin:0,champ:0},
+  {team:"Arizona",code:"ARI",seed:1,region:"West",playin:0,rating:2219.5,r64:100,r32:99.00,s16:89.88,e8:73.99,f4:54.52,fin:32.75,champ:18.81},
+  {team:"LIU",code:"LIU",seed:16,region:"West",playin:0,rating:1423.5,r64:100,r32:1.00,s16:0.09,e8:0.01,f4:0,fin:0,champ:0},
+  {team:"Villanova",code:"VIL",seed:8,region:"West",playin:0,rating:1858.5,r64:100,r32:33.87,s16:2.35,e8:0.73,f4:0.16,fin:0.03,champ:0.01},
+  {team:"Utah St.",code:"USU",seed:9,region:"West",playin:0,rating:1873.4,r64:100,r32:66.13,s16:7.67,e8:3.22,f4:1.08,fin:0.26,champ:0.06},
+  {team:"Wisconsin",code:"WIS",seed:5,region:"West",playin:0,rating:1960.0,r64:100,r32:78.59,s16:43.52,e8:10.71,f4:4.95,fin:1.89,champ:0.71},
+  {team:"High Point",code:"HP",seed:12,region:"West",playin:0,rating:1691.3,r64:100,r32:21.41,s16:5.95,e8:0.57,f4:0.12,fin:0.02,champ:0},
+  {team:"Arkansas",code:"ARK",seed:4,region:"West",playin:0,rating:1997.7,r64:100,r32:93.04,s16:49.73,e8:10.75,f4:4.61,fin:1.53,champ:0.48},
+  {team:"Hawaii",code:"HAW",seed:13,region:"West",playin:0,rating:1602.8,r64:100,r32:6.96,s16:0.81,e8:0.03,f4:0,fin:0,champ:0},
+  {team:"BYU",code:"BYU",seed:6,region:"West",playin:0,rating:1938.0,r64:100,r32:46.94,s16:11.99,e8:3.18,f4:0.52,fin:0.08,champ:0.01},
+  {team:"Texas",code:"TEX",seed:11,region:"West",playin:1,rating:1841.7,r64:22.09,r32:6.05,s16:1.72,e8:0.30,f4:0.06,fin:0.01,champ:0.01},
+  {team:"NC State",code:"NCS",seed:11,region:"West",playin:1,rating:1847.9,r64:30.97,r32:9.10,s16:2.65,e8:0.48,f4:0.11,fin:0.02,champ:0.02},
+  {team:"Gonzaga",code:"GNZ",seed:3,region:"West",playin:0,rating:2037.3,r64:100,r32:97.01,s16:72.56,e8:36.79,f4:13.33,fin:5.42,champ:2.29},
+  {team:"Kennesaw St.",code:"KNS",seed:14,region:"West",playin:0,rating:1530.4,r64:100,r32:2.99,s16:0.30,e8:0.02,f4:0,fin:0,champ:0},
+  {team:"U Miami (FL)",code:"MFL",seed:7,region:"West",playin:0,rating:1889.7,r64:100,r32:53.69,s16:13.76,e8:5.57,f4:1.23,fin:0.36,champ:0.11},
+  {team:"Missouri",code:"MIZ",seed:10,region:"West",playin:0,rating:1796.2,r64:100,r32:46.31,s16:11.14,e8:3.90,f4:0.75,fin:0.20,champ:0.04},
+  {team:"Purdue",code:"PUR",seed:2,region:"West",playin:0,rating:2091.2,r64:100,r32:97.81,s16:74.92,e8:46.17,f4:17.95,fin:8.69,champ:4.14},
+  {team:"Queens",code:"QUE",seed:15,region:"West",playin:0,rating:1478.6,r64:100,r32:2.19,s16:0.19,e8:0.02,f4:0,fin:0,champ:0},
+  {team:"Michigan",code:"UM",seed:1,region:"Midwest",playin:0,rating:2234.9,r64:100,r32:95.45,s16:80.35,e8:61.14,f4:39.08,fin:22.26,champ:12.43},
+  {team:"UMBC",code:"MBC",seed:16,region:"Midwest",playin:1,rating:1521.2,r64:1.42,r32:0,s16:0,e8:0,f4:0,fin:0,champ:0},
+  {team:"Howard",code:"HOW",seed:16,region:"Midwest",playin:1,rating:1462.2,r64:3.14,r32:0,s16:0,e8:0,f4:0,fin:0,champ:0},
+  {team:"Georgia",code:"UGA",seed:8,region:"Midwest",playin:0,rating:1880.0,r64:100,r32:57.43,s16:11.50,e8:4.58,f4:1.35,fin:0.35,champ:0.08},
+  {team:"Saint Louis",code:"STL",seed:9,region:"Midwest",playin:0,rating:1835.9,r64:100,r32:42.57,s16:7.17,e8:2.66,f4:0.69,fin:0.14,champ:0.04},
+  {team:"Texas Tech",code:"TTC",seed:5,region:"Midwest",playin:0,rating:1972.2,r64:100,r32:63.43,s16:16.89,e8:3.20,f4:0.79,fin:0.15,champ:0.03},
+  {team:"Akron",code:"AKR",seed:12,region:"Midwest",playin:0,rating:1739.3,r64:100,r32:36.57,s16:6.72,e8:0.88,f4:0.15,fin:0.02,champ:0},
+  {team:"Alabama",code:"ALA",seed:4,region:"Midwest",playin:0,rating:1972.5,r64:100,r32:89.96,s16:72.65,e8:26.99,f4:12.20,fin:4.81,champ:1.93},
+  {team:"Hofstra",code:"HOF",seed:13,region:"Midwest",playin:0,rating:1694.5,r64:100,r32:10.04,s16:3.74,e8:0.43,f4:0.06,fin:0.01,champ:0},
+  {team:"Tennessee",code:"TEN",seed:6,region:"Midwest",playin:0,rating:1981.2,r64:100,r32:80.98,s16:39.81,e8:15.38,f4:5.84,fin:2.15,champ:0.80},
+  {team:"Miami University (OH)",code:"MOH",seed:11,region:"Midwest",playin:1,rating:1655.0,r64:2.73,r32:0,s16:0,e8:0,f4:0,fin:0,champ:0},
+  {team:"SMU",code:"SMU",seed:11,region:"Midwest",playin:1,rating:1828.5,r64:16.29,r32:4.57,s16:1.03,e8:0.24,f4:0.07,fin:0.02,champ:0.02},
+  {team:"Virginia",code:"UVA",seed:3,region:"Midwest",playin:0,rating:2015.3,r64:100,r32:94.31,s16:54.67,e8:21.48,f4:8.34,fin:3.15,champ:1.21},
+  {team:"Wright St.",code:"WRI",seed:14,region:"Midwest",playin:0,rating:1534.9,r64:100,r32:5.69,s16:0.61,e8:0.04,f4:0,fin:0,champ:0},
+  {team:"Kentucky",code:"UK",seed:7,region:"Midwest",playin:0,rating:1931.7,r64:100,r32:65.76,s16:20.04,e8:9.55,f4:3.30,fin:1.17,champ:0.42},
+  {team:"Santa Clara",code:"SCL",seed:10,region:"Midwest",playin:0,rating:1866.5,r64:100,r32:34.24,s16:6.77,e8:2.35,f4:0.58,fin:0.13,champ:0.03},
+  {team:"Iowa St.",code:"ISU",seed:2,region:"Midwest",playin:0,rating:2145.8,r64:100,r32:97.41,s16:72.97,e8:50.12,f4:27.35,fin:14.22,champ:7.26},
+  {team:"Tennessee St.",code:"TST",seed:15,region:"Midwest",playin:0,rating:1499.9,r64:100,r32:2.60,s16:0.22,e8:0.02,f4:0,fin:0,champ:0},
+];
+
+const MATCHUP_ORDER=[[1,16],[8,9],[5,12],[4,13],[6,11],[3,14],[7,10],[2,15]];
+const ROUND_KEYS=['r64','r32','s16','e8','f4','fin','champ'];
+const REGIONS=['East','South','West','Midwest'];
+
+function probColor(p){
+  if(p>=40)return'#2563eb';
+  if(p>=15)return'#16a34a';
+  if(p>=5)return'#ca8a04';
+  return'#9ca3af';
+}
+
+function getRegionSlots(reg){
+  const teams=DATA.filter(t=>t.region===reg&&!t.playin);
+  const piByS={};
+  DATA.filter(t=>t.region===reg&&t.playin).forEach(t=>{
+    if(!piByS[t.seed])piByS[t.seed]=[];
+    piByS[t.seed].push(t);
+  });
+  function resolve(seed){
+    if(piByS[seed]&&piByS[seed].length===2){
+      const pi=piByS[seed];
+      return{team:pi[0].code+'/'+pi[1].code,code:'PI'+seed,seed,playin:2,rating:Math.max(pi[0].rating,pi[1].rating),
+        r64:pi[0].r64+pi[1].r64,r32:pi[0].r32+pi[1].r32,s16:pi[0].s16+pi[1].s16,e8:pi[0].e8+pi[1].e8,
+        f4:pi[0].f4+pi[1].f4,fin:pi[0].fin+pi[1].fin,champ:pi[0].champ+pi[1].champ,_pi:pi};
+    }
+    return teams.find(t=>t.seed===seed)||null;
+  }
+  return MATCHUP_ORDER.flatMap(([s1,s2])=>[resolve(s1),resolve(s2)]);
+}
+
+// ---- Layout constants ----
+const TW=108, TH=22, TGAP=1; // team slot width, height, gap between pair
+
+// Build a region half-bracket as positioned elements + SVG connectors
+// Returns {html, svgLines, width, height}
+// dir: 'left' (rounds go left→right) or 'right' (rounds go right→left)
+function layoutRegion(reg, dir, xOffset, yOffset, roundCount){
+  const slots=getRegionSlots(reg);
+  const rounds=roundCount||4; // for single region view show 4 rounds (R64-E8)
+
+  // For each round, compute the y-centers of each "game slot"
+  // Round 0 = 16 teams = 8 games of 2
+  // Round r = 8/2^r teams projected
+  const totalTeams=16;
+  const pairH=TH*2+TGAP+2; // height of a pair (2 teams + gap)
+  const groupH=(rnd)=> pairH * Math.pow(2,rnd);
+  const totalH=groupH(0)*8; // same for all rounds: 8 pairs at round 0
+
+  const colW=TW+16; // column width including connector gap
+  const results=[];
+
+  for(let r=0;r<rounds;r++){
+    const nGroups=8/Math.pow(2,r);
+    const gh=groupH(r);
+    const col=dir==='left'?r:(rounds-1-r);
+    const x=xOffset+col*colW;
+
+    for(let g=0;g<nGroups;g++){
+      const centerY=yOffset+g*gh+gh/2;
+      const y1=centerY-TH-TGAP/2;
+      const y2=centerY+TGAP/2;
+
+      let t1,t2;
+      if(r===0){
+        t1=slots[g*2]; t2=slots[g*2+1];
+      } else {
+        // pick best by this round's prob from the group
+        const stride=Math.pow(2,r);
+        const grpSlots=slots.slice(g*stride*2,(g+1)*stride*2).filter(Boolean);
+        const key=ROUND_KEYS[r];
+        t1=grpSlots.reduce((a,b)=>(!a||(b&&(b[key]||0)>(a[key]||0))?b:a),null);
+        t2=null;
+      }
+
+      results.push({r,g,col,x,y1,y2,t1,t2,gh,centerY,dir,reg});
+    }
+  }
+  return{slots,results,totalH,colW,rounds};
+}
+
+// ---- Tooltip ----
+let hoveredCode=null;
+function showTip(e,t){
+  const tip=document.getElementById('tip');
+  tip.innerHTML=`<div class="tn">${t.team}<br><span style="font-size:11px;color:var(--text2);font-weight:400">${t.seed} seed · ${t.region}</span></div>
+    <div class="trow"><span class="tlabel">Rating</span><span class="tval">${t.rating?t.rating.toFixed(0):'—'}</span></div>
+    <div class="trow"><span class="tlabel">Rd of 64</span><span class="tval">${fmt(t.r64)}</span></div>
+    <div class="trow"><span class="tlabel">Rd of 32</span><span class="tval">${fmt(t.r32)}</span></div>
+    <div class="trow"><span class="tlabel">Sweet 16</span><span class="tval">${fmt(t.s16)}</span></div>
+    <div class="trow"><span class="tlabel">Elite 8</span><span class="tval">${fmt(t.e8)}</span></div>
+    <div class="trow"><span class="tlabel">Final Four</span><span class="tval">${fmt(t.f4)}</span></div>
+    <div class="trow"><span class="tlabel">Finals</span><span class="tval">${fmt(t.fin)}</span></div>
+    <div class="trow"><span class="tlabel">Champion</span><span class="tchamp">${fmt(t.champ)}</span></div>`;
+  tip.classList.add('show');
+  moveTip(e);
+}
+function moveTip(e){
+  const tip=document.getElementById('tip');
+  const x=e.clientX+14,y=e.clientY-10;
+  tip.style.left=(x+185>window.innerWidth?e.clientX-200:x)+'px';
+  tip.style.top=(y+240>window.innerHeight?e.clientY-240:y)+'px';
+}
+function hideTip(){document.getElementById('tip').classList.remove('show');}
+document.addEventListener('mousemove',moveTip);
+function fmt(v){return v>0?v.toFixed(v<1?2:1)+'%':'—';}
+
+// Highlight a team path
+function highlightTeam(code){
+  hoveredCode=code;
+  document.querySelectorAll('.team').forEach(el=>{
+    if(code){
+      el.classList.toggle('dimmed',el.dataset.code!==code);
+      el.classList.toggle('hovered',el.dataset.code===code);
+    } else {
+      el.classList.remove('dimmed','hovered');
+    }
+  });
+  // SVG lines: show/hide
+  document.querySelectorAll('line.connector,path.connector').forEach(el=>{
+    if(code){
+      const show=el.dataset.code===code;
+      el.style.opacity=show?'1':'0';
+    } else {
+      el.style.opacity='';
+    }
+  });
+  document.querySelectorAll('.cond-label').forEach(el=>{
+    if(code){
+      el.style.opacity=el.dataset.code===code?'1':'0';
+    } else {
+      el.style.opacity='0';
+    }
+  });
+}
+
+// ---- Full bracket renderer ----
+function renderFull(){
+  const REGION_H=16*TH+15*(TGAP+1)+20; // approximate per-region height
+  const colW=TW+16;
+  // Layout: 4 rounds left (East top, South bottom), center 3 rounds, 4 rounds right (West top, Midwest bottom)
+  // Each region gets 4 rounds (R64→E8), center gets F4/Finals/Champ
+
+  // We'll use absolute positioning within a fixed-size container
+  const regPad=28; // vertical padding between regions on same side
+  const regionRows=2;
+  const perRegH=8*(TH*2+TGAP+4)+2; // 8 matchups * pair height
+  const totalH=perRegH*2+regPad+60;
+  const totalW=colW*4+80+colW*4; // 4 left + center + 4 right
+
+  const container=document.getElementById('container');
+  container.innerHTML='';
+
+  const wrap=document.createElement('div');
+  wrap.style.cssText=`position:relative;overflow-x:auto;overflow-y:visible;`;
+
+  const inner=document.createElement('div');
+  inner.style.cssText=`position:relative;min-width:${totalW+20}px;height:${totalH+40}px;`;
+
+  const svgEl=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svgEl.style.cssText='position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;';
+  svgEl.setAttribute('width',totalW+20);
+  svgEl.setAttribute('height',totalH+40);
+
+  const regSlots={};
+  REGIONS.forEach(r=>{regSlots[r]=getRegionSlots(r);});
+
+  // Place regions: East & South on left, West & Midwest on right
+  // Left side: 4 cols (R64, R32, S16, E8) going left→right
+  // Right side: 4 cols (E8, S16, R32, R64) going right→left (mirrored)
+  const leftRegs=['East','South'];
+  const rightRegs=['West','Midwest'];
+
+  const centerX=colW*4+40;
+  const centerW=colW*3;
+  const rightStart=centerX+centerW;
+
+  const teamEls=[]; // {el, t, x, y, side}
+  const connectors=[]; // for SVG lines
+
+  function placeRegion(reg, xBase, yBase, dir){
+    const slots=regSlots[reg];
+    const pairH=TH*2+TGAP+4;
+    const rounds=4;
+
+    // For each round, place slots
+    // Round 0: 8 pairs of 2, stacked vertically
+    // Round r: 8/2^r slots, each centered in span of 2^r pairs
+
+    for(let r=0;r<rounds;r++){
+      const nSlots=8/Math.pow(2,r);
+      const span=Math.pow(2,r);
+      const colIdx=dir==='left'?r:(rounds-1-r);
+      const x=xBase+colIdx*colW;
+      const key=ROUND_KEYS[r];
+
+      for(let g=0;g<nSlots;g++){
+        const groupTop=yBase+g*span*pairH;
+        const groupBot=groupTop+span*pairH;
+        const midY=(groupTop+groupBot)/2;
+
+        let t;
+        if(r===0){
+          // two teams per game
+          [0,1].forEach(offset=>{
+            const slot=slots[g*2+offset];
+            if(!slot)return;
+            const sy=yBase+g*pairH+(offset===0?0:TH+TGAP+2);
+            placeTeam(slot,x,sy,key,dir,reg,r,g);
+            teamEls.push({t:slot,x,y:sy+TH/2,r,g,dir,reg,side:dir==='left'?'L':'R'});
+          });
+        } else {
+          const grpSlots=slots.slice(g*span*2,(g+1)*span*2).filter(Boolean);
+          t=grpSlots.reduce((a,b)=>(!a||(b&&(b[key]||0)>(a[key]||0))?b:a),null);
+          if(t){
+            const sy=midY-TH/2;
+            placeTeam(t,x,sy,key,dir,reg,r,g);
+            teamEls.push({t,x,y:midY,r,g,dir,reg,side:dir==='left'?'L':'R'});
+          }
+        }
+      }
+    }
+
+    // Draw connectors between rounds
+    for(let r=0;r<rounds-1;r++){
+      const nFrom=8/Math.pow(2,r);
+      const fromColIdx=dir==='left'?r:(rounds-1-r);
+      const toColIdx=dir==='left'?r+1:(rounds-2-r);
+      const fromX=xBase+fromColIdx*colW+TW;
+      const toX=xBase+toColIdx*colW;
+      const midX=(fromX+toX)/2;
+
+      for(let g=0;g<nFrom;g+=2){
+        // Two slots from this round converge into one slot in next round
+        const span=Math.pow(2,r);
+        const pairH=TH*2+TGAP+4;
+
+        function getSlotY(round, gIdx){
+          const sp=Math.pow(2,round);
+          const gt=yBase+gIdx*sp*pairH;
+          const gb=gt+sp*pairH;
+          return(gt+gb)/2;
+        }
+
+        const y1=getSlotY(r,g);
+        const y2=getSlotY(r,g+1);
+        const yMid=getSlotY(r+1,Math.floor(g/2));
+
+        // For each slot, find best team
+        const key1=ROUND_KEYS[r],key2=ROUND_KEYS[r+1];
+        [g,g+1].forEach((gi,idx)=>{
+          const sp=Math.pow(2,r);
+          const grpSlots=r===0?[slots[gi*2],slots[gi*2+1]].filter(Boolean):slots.slice(gi*sp*2,(gi+1)*sp*2).filter(Boolean);
+          const best=grpSlots.reduce((a,b)=>(!a||(b&&(b[key2]||0)>(a[key2]||0))?b:a),null);
+          if(!best)return;
+
+          const fromY=r===0?(yBase+gi*pairH+TH/2+(best===grpSlots[1]?TH+TGAP+2:0)):getSlotY(r,gi);
+          const toY=yMid;
+          const cond=best[key1]>0?(best[key2]/best[key1]*100):0;
+          const prob=best[key2]||0;
+          const sw=Math.max(0.8,Math.min(6,prob/12));
+
+          connectors.push({t:best,fromX,toX,midX,fromY,toY,r,prob,cond,sw,dir,reg});
+        });
+      }
+    }
+
+    // E8 → F4 connectors (from E8 col to center)
+    const e8ColIdx=dir==='left'?3:0;
+    const e8X=xBase+e8ColIdx*colW+TW;
+    const towardCenter=dir==='left'?e8X+8:e8X-8;
+    for(let g=0;g<1;g++){
+      const sp=8;
+      const pairH=TH*2+TGAP+4;
+      const gt=yBase;
+      const gb=yBase+16*pairH;
+      const midY=(gt+gb)/2;
+      const grpSlots=slots.filter(Boolean);
+      const best=grpSlots.reduce((a,b)=>(!a||(b&&(b.f4||0)>(a.f4||0))?b:a),null);
+      if(best){
+        connectors.push({t:best,fromX:e8X,toX:dir==='left'?centerX:rightStart,midX:dir==='left'?centerX-20:rightStart+20,fromY:midY,toY:midY,r:4,prob:best.f4,cond:best.e8>0?(best.f4/best.e8*100):0,sw:Math.max(0.8,Math.min(8,best.f4/8)),dir,reg,toCenter:true});
+      }
+    }
+  }
+
+  function placeTeam(t, x, y, key, dir, reg, r, g){
+    if(!t)return;
+    const el=document.createElement('div');
+    el.className='team'+(t.playin?' playin':'')+(t.champ>10?' champion':'');
+    el.dataset.code=t.code;
+    el.style.cssText=`left:${x}px;top:${y}px;width:${TW}px;height:${TH}px;`;
+    const prob=t[key]||0;
+    const col=probColor(prob);
+    const nm=t.team.length>14?(t.code||t.team.slice(0,11)):t.team;
+    el.innerHTML=`<div class="pbar" style="width:${Math.min(prob,100)}%;background:${col}"></div>
+      <span class="seed">${t.seed}</span>
+      <span class="tname">${nm}</span>
+      <span class="tprob">${prob>0?prob.toFixed(prob<1?1:0)+'%':''}</span>`;
+    el.addEventListener('mouseenter',e=>{showTip(e,t);highlightTeam(t.code);});
+    el.addEventListener('mouseleave',()=>{hideTip();highlightTeam(null);});
+    inner.appendChild(el);
+  }
+
+  // Place left regions
+  const pairH=TH*2+TGAP+4;
+  const eastH=8*pairH;
+  placeRegion('East',0,0,'left');
+  placeRegion('South',0,eastH+regPad,'left');
+
+  // Place right regions (mirrored)
+  placeRegion('West',rightStart,0,'right');
+  placeRegion('Midwest',rightStart,eastH+regPad,'right');
+
+  // Center: F4 + Finals + Champ
+  const centerMidEast=eastH/2;
+  const centerMidSouth=eastH+regPad+eastH/2;
+  const centerMidWest=eastH/2;
+  const centerMidMidwest=eastH+regPad+eastH/2;
+
+  const f4Teams=REGIONS.map(r=>{
+    const s=regSlots[r];
+    return s.filter(Boolean).reduce((a,b)=>(!a||(b.f4||0)>(a.f4||0)?b:a),null);
+  });
+  const finTeams=REGIONS.map(r=>{
+    const s=regSlots[r];
+    return s.filter(Boolean).reduce((a,b)=>(!a||(b.fin||0)>(a.fin||0)?b:a),null);
+  });
+  const champTeam=REGIONS.map(r=>{
+    const s=regSlots[r];
+    return s.filter(Boolean).reduce((a,b)=>(!a||(b.champ||0)>(a.champ||0)?b:a),null);
+  }).reduce((a,b)=>(!a||(b.champ||0)>(a.champ||0)?b:a),null);
+
+  // F4 slots
+  const f4YEast=centerMidEast-TH/2;
+  const f4YSouth=centerMidSouth-TH/2;
+  const f4YWest=centerMidWest-TH/2;
+  const f4YMidwest=centerMidMidwest-TH/2;
+  const finYTop=(f4YEast+f4YSouth)/2;
+  const finYBot=(f4YWest+f4YMidwest)/2;
+  const champY=(finYTop+finYBot+TH)/2-TH/2;
+
+  const cx1=centerX+8;
+  const cx2=centerX+colW;
+  const cx3=centerX+colW*2;
+  const cxr1=rightStart-8-TW;
+  const cxr2=rightStart-colW-TW;
+
+  // F4 left (East, South)
+  [f4Teams[0]&&{...f4Teams[0],_fy:f4YEast},f4Teams[1]&&{...f4Teams[1],_fy:f4YSouth}].forEach(t=>{
+    if(!t)return;
+    placeTeam(t,cx1,t._fy,'f4','left','center',4,0);
+  });
+  // Finals left
+  if(finTeams[0]||finTeams[1]){
+    const ft=([finTeams[0],finTeams[1]].filter(Boolean).reduce((a,b)=>(b.fin>a.fin?b:a)));
+    placeTeam(ft,cx2,finYTop,'fin','left','center',5,0);
+  }
+  // Champion
+  if(champTeam) placeTeam({...champTeam,champ:99},cx3-TW/2,champY,'champ','left','center',6,0);
+  // Finals right
+  if(finTeams[2]||finTeams[3]){
+    const ft=([finTeams[2],finTeams[3]].filter(Boolean).reduce((a,b)=>(b.fin>a.fin?b:a)));
+    placeTeam(ft,cxr2,finYBot,'fin','right','center',5,0);
+  }
+  // F4 right (West, Midwest)
+  [f4Teams[2]&&{...f4Teams[2],_fy:f4YWest},f4Teams[3]&&{...f4Teams[3],_fy:f4YMidwest}].forEach(t=>{
+    if(!t)return;
+    placeTeam(t,cxr1,t._fy,'f4','right','center',4,0);
+  });
+
+  // Region labels
+  const labelStyle='position:absolute;font-size:10px;font-weight:600;letter-spacing:0.8px;text-transform:uppercase;color:var(--text3);';
+  [['East',2,eastH/2-6],['South',2,eastH+regPad+eastH/2-6],['West',rightStart+colW*2+2,eastH/2-6],['Midwest',rightStart+colW*2+2,eastH+regPad+eastH/2-6]].forEach(([name,x,y])=>{
+    const lbl=document.createElement('div');
+    lbl.style.cssText=labelStyle+`left:${x}px;top:${y-14}px;`;
+    lbl.textContent=name;
+    inner.appendChild(lbl);
+  });
+
+  // Round labels
+  const rlabels=['R64','R32','Sweet 16','Elite 8'];
+  rlabels.forEach((lbl,i)=>{
+    const lx=i*colW+TW/2;
+    const l=document.createElement('div');
+    l.style.cssText=`position:absolute;font-size:10px;font-weight:600;letter-spacing:0.7px;text-transform:uppercase;color:var(--text3);text-align:center;width:${TW}px;left:${lx}px;top:${totalH+8}px;`;
+    l.textContent=lbl;
+    inner.appendChild(l);
+    // right side
+    const rx=rightStart+(3-i)*colW;
+    const r2=document.createElement('div');
+    r2.style.cssText=`position:absolute;font-size:10px;font-weight:600;letter-spacing:0.7px;text-transform:uppercase;color:var(--text3);text-align:center;width:${TW}px;left:${rx}px;top:${totalH+8}px;`;
+    r2.textContent=lbl;
+    inner.appendChild(r2);
+  });
+  const centerLabels=[['F4',cx1],['Finals',cx2],['Champion',cx3-TW/2],['Finals',cxr2],['F4',cxr1]];
+  centerLabels.forEach(([lbl,x])=>{
+    const l=document.createElement('div');
+    l.style.cssText=`position:absolute;font-size:10px;font-weight:600;letter-spacing:0.7px;text-transform:uppercase;color:var(--text3);text-align:center;width:${TW}px;left:${x}px;top:${totalH+8}px;`;
+    l.textContent=lbl;
+    inner.appendChild(l);
+  });
+
+  // Draw SVG connectors
+  connectors.forEach(c=>{
+    drawConnector(svgEl,c);
+  });
+
+  // Center connectors: F4→Finals→Champ
+  // Left side
+  if(f4Teams[0]&&finTeams[0]){
+    const t=finTeams[0];
+    const cond=t.f4>0?(t.fin/t.f4*100):0;
+    const sw=Math.max(1,Math.min(7,t.fin/6));
+    drawSimpleLine(svgEl,cx1+TW,f4YEast+TH/2,cx2,finYTop+TH/2,t.code,sw,t.fin,cond);
+  }
+  if(f4Teams[1]&&finTeams[0]){
+    const t=finTeams[0];
+    const cond=t.f4>0?(t.fin/t.f4*100):0;
+    const sw=Math.max(1,Math.min(7,t.fin/6));
+    drawSimpleLine(svgEl,cx1+TW,f4YSouth+TH/2,cx2,finYTop+TH/2,f4Teams[1].code,sw,f4Teams[1].fin,f4Teams[1].f4>0?(f4Teams[1].fin/f4Teams[1].f4*100):0);
+  }
+  if(finTeams[0]&&champTeam){
+    const t=champTeam;
+    const sw=Math.max(1,Math.min(8,t.champ/4));
+    drawSimpleLine(svgEl,cx2+TW,finYTop+TH/2,cx3-TW/2,champY+TH/2,t.code,sw,t.champ,t.fin>0?(t.champ/t.fin*100):0);
+  }
+  // Right side
+  if(f4Teams[2]&&finTeams[2]){
+    const t=finTeams[2];
+    const cond=t.f4>0?(t.fin/t.f4*100):0;
+    const sw=Math.max(1,Math.min(7,t.fin/6));
+    drawSimpleLine(svgEl,cxr1,f4YWest+TH/2,cxr2+TW,finYBot+TH/2,t.code,sw,t.fin,cond);
+  }
+  if(f4Teams[3]){
+    const t=f4Teams[3];
+    const sw=Math.max(1,Math.min(7,t.fin/6));
+    drawSimpleLine(svgEl,cxr1,f4YMidwest+TH/2,cxr2+TW,finYBot+TH/2,t.code,sw,t.fin,t.f4>0?(t.fin/t.f4*100):0);
+  }
+  if(finTeams[2]&&champTeam){
+    const t=finTeams[2];
+    const sw=Math.max(1,Math.min(7,t.fin/4));
+    drawSimpleLine(svgEl,cxr2,finYBot+TH/2,cx3+TW/2,champY+TH/2,t.code,sw,t.fin,t.f4>0?(t.fin/t.f4*100):0);
+  }
+
+  inner.appendChild(svgEl);
+  wrap.appendChild(inner);
+  container.appendChild(wrap);
+}
+
+function drawConnector(svg, c){
+  const {t,fromX,toX,fromY,toY,prob,cond,sw,dir} = c;
+  if(!t)return;
+  const midX=(fromX+toX)/2;
+
+  const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+  const d=`M ${fromX} ${fromY} C ${midX} ${fromY}, ${midX} ${toY}, ${toX} ${toY}`;
+  path.setAttribute('d',d);
+  path.setAttribute('fill','none');
+  path.setAttribute('stroke',probColor(prob));
+  path.setAttribute('stroke-width',Math.max(0.7,sw));
+  path.setAttribute('stroke-opacity','0.45');
+  path.dataset.code=t.code;
+  path.classList.add('connector');
+  path.style.transition='opacity .15s';
+  svg.appendChild(path);
+
+  // Conditional prob label (shown on hover)
+  if(cond>0){
+    const lx=midX;
+    const ly=(fromY+toY)/2;
+    const fg=document.createElementNS('http://www.w3.org/2000/svg','foreignObject');
+    fg.setAttribute('x',lx-18);fg.setAttribute('y',ly-9);fg.setAttribute('width','36');fg.setAttribute('height','16');
+    fg.dataset.code=t.code;
+    fg.classList.add('cond-label');
+    fg.style.opacity='0';
+    fg.style.transition='opacity .15s';
+    const div=document.createElement('div');
+    div.style.cssText=`font-size:9px;font-weight:600;color:#2563eb;background:var(--card);border-radius:2px;padding:1px 2px;text-align:center;white-space:nowrap;`;
+    div.textContent=cond.toFixed(0)+'%';
+    fg.appendChild(div);
+    svg.appendChild(fg);
+  }
+}
+
+function drawSimpleLine(svg,x1,y1,x2,y2,code,sw,prob,cond){
+  const midX=(x1+x2)/2;
+  const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+  const d=`M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`;
+  path.setAttribute('d',d);
+  path.setAttribute('fill','none');
+  path.setAttribute('stroke',probColor(prob));
+  path.setAttribute('stroke-width',Math.max(1,sw));
+  path.setAttribute('stroke-opacity','0.5');
+  path.dataset.code=code;
+  path.classList.add('connector');
+  path.style.transition='opacity .15s';
+  svg.appendChild(path);
+
+  if(cond>0){
+    const lx=(x1+x2)/2;
+    const ly=(y1+y2)/2;
+    const fg=document.createElementNS('http://www.w3.org/2000/svg','foreignObject');
+    fg.setAttribute('x',lx-18);fg.setAttribute('y',ly-9);fg.setAttribute('width','36');fg.setAttribute('height','16');
+    fg.dataset.code=code;
+    fg.classList.add('cond-label');
+    fg.style.opacity='0';
+    fg.style.transition='opacity .15s';
+    const div=document.createElement('div');
+    div.style.cssText=`font-size:9px;font-weight:600;color:#2563eb;background:var(--card);border-radius:2px;padding:1px 2px;text-align:center;white-space:nowrap;`;
+    div.textContent=cond.toFixed(0)+'%';
+    fg.appendChild(div);
+    svg.appendChild(fg);
+  }
+}
+
+// ---- Single region view ----
+function renderRegion(reg){
+  const container=document.getElementById('container');
+  container.innerHTML='';
+  const slots=getRegionSlots(reg);
+  const pairH=TH*2+TGAP+4;
+  const rounds=4;
+  const colW=TW+20;
+  const totalW=colW*rounds;
+  const totalH=8*pairH+40;
+
+  const wrap=document.createElement('div');
+  wrap.style.cssText=`position:relative;overflow-x:auto;`;
+  const inner=document.createElement('div');
+  inner.style.cssText=`position:relative;width:${totalW+20}px;height:${totalH}px;`;
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.style.cssText='position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;';
+  svg.setAttribute('width',totalW+20);
+  svg.setAttribute('height',totalH);
+
+  const roundLabels=['R64','Rd of 32','Sweet 16','Elite 8'];
+
+  for(let r=0;r<rounds;r++){
+    const nSlots=r===0?8:8/Math.pow(2,r);
+    const span=Math.pow(2,r);
+    const x=r*colW;
+    const key=ROUND_KEYS[r];
+
+    // round label
+    const lbl=document.createElement('div');
+    lbl.style.cssText=`position:absolute;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.7px;color:var(--text3);left:${x+2}px;top:${totalH-28}px;`;
+    lbl.textContent=roundLabels[r];
+    inner.appendChild(lbl);
+
+    for(let g=0;g<nSlots;g++){
+      const groupTop=g*span*pairH;
+      const groupBot=groupTop+span*pairH;
+      const midY=(groupTop+groupBot)/2;
+
+      if(r===0){
+        [0,1].forEach(offset=>{
+          const t=slots[g*2+offset];
+          if(!t)return;
+          const sy=g*pairH+(offset===0?0:TH+TGAP+2);
+          placeTeamR(t,x,sy,key,inner);
+          // connectors to round 1
+          if(r<rounds-1){
+            const nextSpan=Math.pow(2,1);
+            const nextG=Math.floor(g/2);
+            const nTop=nextG*nextSpan*pairH;
+            const nBot=nTop+nextSpan*pairH;
+            const nextMidY=(nTop+nBot)/2;
+            const fromY=sy+TH/2;
+            const toY=nextMidY;
+            const condVal=t[ROUND_KEYS[1]]>0?(t[ROUND_KEYS[1]]/t[ROUND_KEYS[0]]*100):0;
+            drawConnectorR(svg,x+TW,fromY,(r+1)*colW,toY,t,ROUND_KEYS[1],condVal);
+          }
+        });
+      } else {
+        const grpSlots=slots.slice(g*span*2,(g+1)*span*2).filter(Boolean);
+        const t=grpSlots.reduce((a,b)=>(!a||(b&&(b[key]||0)>(a[key]||0))?b:a),null);
+        if(!t)continue;
+        const sy=midY-TH/2;
+        placeTeamR(t,x,sy,key,inner);
+        if(r<rounds-1){
+          const nextSpan=Math.pow(2,r+1);
+          const nextG=Math.floor(g/2);
+          const nTop=nextG*nextSpan*pairH;
+          const nBot=nTop+nextSpan*pairH;
+          const nextMidY=(nTop+nBot)/2;
+          const condVal=t[key]>0?(t[ROUND_KEYS[r+1]]/t[key]*100):0;
+          drawConnectorR(svg,x+TW,midY,(r+1)*colW,nextMidY,t,ROUND_KEYS[r+1],condVal);
+        }
+      }
+    }
+  }
+
+  function placeTeamR(t,x,y,key,parent){
+    const el=document.createElement('div');
+    el.className='team'+(t.playin?' playin':'')+(t.champ>10?' champion':'');
+    el.dataset.code=t.code;
+    el.style.cssText=`left:${x}px;top:${y}px;width:${TW}px;height:${TH}px;`;
+    const prob=t[key]||0;
+    const col=probColor(prob);
+    const nm=t.team.length>14?t.code:t.team;
+    el.innerHTML=`<div class="pbar" style="width:${Math.min(prob,100)}%;background:${col}"></div>
+      <span class="seed">${t.seed}</span>
+      <span class="tname">${nm}</span>
+      <span class="tprob">${prob>0?prob.toFixed(prob<1?1:0)+'%':''}</span>`;
+    el.addEventListener('mouseenter',e=>{showTip(e,t);highlightTeam(t.code);});
+    el.addEventListener('mouseleave',()=>{hideTip();highlightTeam(null);});
+    parent.appendChild(el);
+  }
+
+  function drawConnectorR(svg,x1,y1,x2,y2,t,toKey,cond){
+    const prob=t[toKey]||0;
+    const sw=Math.max(0.8,Math.min(7,prob/14));
+    const midX=(x1+x2)/2;
+    const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+    const d=`M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`;
+    path.setAttribute('d',d);
+    path.setAttribute('fill','none');
+    path.setAttribute('stroke',probColor(prob));
+    path.setAttribute('stroke-width',sw);
+    path.setAttribute('stroke-opacity','0.5');
+    path.dataset.code=t.code;
+    path.classList.add('connector');
+    path.style.transition='opacity .15s';
+    svg.appendChild(path);
+
+    if(cond>0){
+      const fg=document.createElementNS('http://www.w3.org/2000/svg','foreignObject');
+      fg.setAttribute('x',midX-18);fg.setAttribute('y',(y1+y2)/2-9);fg.setAttribute('width','36');fg.setAttribute('height','16');
+      fg.dataset.code=t.code;
+      fg.classList.add('cond-label');
+      fg.style.opacity='0';
+      fg.style.transition='opacity .15s';
+      const div=document.createElement('div');
+      div.style.cssText=`font-size:9px;font-weight:700;color:#2563eb;background:var(--card);border-radius:3px;padding:1px 3px;text-align:center;white-space:nowrap;line-height:14px;`;
+      div.textContent=cond.toFixed(0)+'%';
+      fg.appendChild(div);
+      svg.appendChild(fg);
+    }
+  }
+
+  inner.appendChild(svg);
+  wrap.appendChild(inner);
+  container.appendChild(wrap);
+}
+
+function switchTab(tab,el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  if(tab==='all') renderFull();
+  else renderRegion(tab);
+}
+
+renderFull();
+</script>
+</body>
+</html>
